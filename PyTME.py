@@ -1,7 +1,7 @@
 """
     * APFJogos - Python Text Mode Emulator (PyTME)
     *   versao:1.0
-    *   data da ultima revisao: 12/08/2016
+    *   data da ultima revisao: 12/11/2023
     *   por: Carlos A. Correia
     * 
     * A classe <code>Pytme</code> emula o Modo Texto com diversas funcionalidades.
@@ -16,9 +16,9 @@
     * 
     * 
     * <p> As principais funcoes sao:
-    *   clrScr(); clrEol();
-    * 	print(String); println(String);
-    * 	isKeyPressed(); readKey(); typeText();
+    *   clr_scr(); clr_eol();
+    *   text(String); textln(String);
+    *   is_key_pressed(); read_key(); type_text(); type_textln();
     * 
     * Esta classe foi concebida para ser usada na Colecao Aprenda a Programar Fazendo Jogos
     * 
@@ -34,7 +34,7 @@ try:
     import Tkinter as tk
     import tkFont as font
 except:
-    import Tkinter as tk
+    import tkinter as tk
     from tkinter.font import Font as font
 
 
@@ -57,7 +57,7 @@ class Pytme:
     BACK_GROUND_COLOR_DEFAULT = "BLACK"
     TEXT_COLOR_DEFAULT = "WHITE"
     opcoes_do_texto = {"font":fonte, "anchor":tk.NW, "fill":TEXT_COLOR_DEFAULT}
-    opcoes_da_janela = {"width":qtd_colunas * char_width+2,
+    opcoes_da_janela = {"width":qtd_colunas * char_width+5,
                         "height":qtd_linhas * char_height+2,
                         "bd":0, "bg":BACK_GROUND_COLOR_DEFAULT,
                         "takefocus":1, "highlightthickness":0}
@@ -67,6 +67,9 @@ class Pytme:
     #caracteres_ = {chr(i): "" for i in range(32)} #caracteres especiais
     cursor_X = 1
     cursor_Y = 1
+    cursor_color = "WHITE" #"YELLOW"
+    cursor_width = char_width
+    cursor_height = char_height//4
     cursor_on = True            # indica se cursor aparece ou nao na tela
     cursor_insert = True        # indica se cursor esta no modo de 'insert'
     cursor_typing_text = False  # indica se cursor esta no modo de edicao
@@ -86,10 +89,11 @@ class Pytme:
         self.window.title(self.titulo)
         self.canvas = tk.Canvas(self.window, **self.opcoes_da_janela)
         self.canvas.focus_set()
-        self.canvas.bind("<Key>", self.key_pressed)
-        self.canvas.bind("<KeyRelease>", self.on_key_released)
+        self.window.bind("<Key>", self.on_key_pressed)
+        self.window.bind("<KeyRelease>", self.on_key_released)
         self.canvas.pack()
         self.set_key_released()
+
 
     def init(self):
         if not canvas:
@@ -144,16 +148,35 @@ class Pytme:
             self.canvas.create_text(2,linha * self.char_height,
                                     text=self.conteudo[z:z+self.qtd_colunas],
                                     **self.opcoes_do_texto)
-        self.canvas.update()
+        
+        #print("==>",self.cursor_on, self.cursor_XOR_mode, self.cursor_insert)
+        #print("self.cursor_X: ",self.cursor_X," self.cursor_Y: ",self.cursor_Y)
 
         if (self.cursor_on):
-        	if (self.cursor_XOR_mode):
-        		print("kkk")
-        #        g.setXORMode(Color.BLACK)
-        #        if (self.cursor_insert)
-        #            g.fillRect(cursorX * charWidth - charWidth, cursorY * charHeight, charWidth, 3)
-        #        else
-        #            g.fillRect(cursorX * charWidth - charWidth, cursorY * charHeight-charHeight+3, charWidth, charHeight)
+            x=(self.cursor_X-1)*self.char_width+2
+            y=(self.cursor_Y)*self.char_height-self.cursor_height
+            
+            if self.cursor_XOR_mode:
+                cursor_rectangle = self.canvas.create_rectangle(x,y,
+                                                                x+self.cursor_width,y+self.cursor_height,
+                                                                fill=self.cursor_color)
+            else:
+            #    #print("sem cursor")
+                pass
+        
+        #     if (self.cursor_XOR_mode):
+        #         print("zzzzzzz",self.cursor_X, self.cursor_Y)
+        # #        g.setXORMode(Color.BLACK)
+        #         if (self.cursor_insert):
+        #             cursor_rectangle = self.canvas.create_rectangle(x,y,
+        #                                                     x+self.cursor_width,y+self.cursor_height,
+        #                                                     fill="BLACK")
+        #         else:
+        #             #g.fillRect(cursorX * charWidth - charWidth, cursorY * charHeight-charHeight+3, charWidth, charHeight)
+        #             cursor_rectangle = self.canvas.create_rectangle(x,y,
+        #                                                     x+self.cursor_width,y+self.cursor_height,
+        #                                                     fill=self.cursor_color)
+        self.canvas.update()
 
 
 
@@ -239,9 +262,11 @@ class Pytme:
         return self.cursor_Y
 
     def change_cursor_state(self):
-        print("piscou")
-    	if (self.cursor_typing_text):
+        #print("piscou")
+        if (self.cursor_typing_text):
             self.cursor_XOR_mode = not self.cursor_XOR_mode
+            self.canvas.after(self.cursor_ticks, self.change_cursor_state)
+            self.paint()
             #self.paint()
 
 
@@ -336,18 +361,19 @@ class Pytme:
             self.paint()
 
     def text(self, *args):
-    	for texto in args:
-    		self.printing_text(texto)
+        for texto in args:
+            self.printing_text(texto)
 
-    def text_ln(self, *args):
-        self.printing_text(*args)
+    def textln(self, *args):
+        for texto in args:
+            self.printing_text(texto)
         self.carriage_return_line_feed()
 
 
     ###  metodo de temporizacao  ###
 
     def delay(self, milliseconds=0):
-        self.canvas.after(milliseconds)
+        self.window.after(milliseconds)
 
 
     ### metodos referente a leitura de teclados: bind()
@@ -358,12 +384,12 @@ class Pytme:
         self.code_key_pressed = None
 
     def get_key_pressed(self):
-    	return self.key_pressed
+        return self.key_pressed
 
     def get_key_code_pressed(self):
-    	return self.code_key_pressed
+        return self.code_key_pressed
 
-    def key_pressed(self, event):
+    def on_key_pressed(self, event):
         self.key_pressed = event.char
         self.code_key_pressed = event.keycode
         #self.is_key_pressed = True
@@ -389,11 +415,11 @@ class Pytme:
 
 
     def typing_text(self):
-    	def insert_str(string, str_to_insert, index, insert=True):
-    		return string[:index] + str_to_insert + string[(index if insert else index+len(str_to_insert)):]
+        def insert_str(string, str_to_insert, index, insert=True):
+            return string[:index] + str_to_insert + string[(index if insert else index+len(str_to_insert)):]
 
-    	def delete_char_at(string, index):
-    		return string[:index]+string[(index+1):]
+        def delete_char_at(string, index):
+            return string[:index]+string[(index+1):]
 
         s = "" #new StringBuffer("");
         x_cursor_inicial = self.get_cursor_X()
@@ -402,33 +428,31 @@ class Pytme:
         x_cursor = x_cursor_inicial
         y_cursor = y_cursor_inicial
         cursor_mode = self.get_cursor_mode()   ## para voltar ao estado inicial do cursor
-        self.cursor_XOR_mode = True                 ## para comecar com o cursor impresso na tela
+        self.cursor_XOR_mode = True            ## para comecar com o cursor impresso na tela
         self.set_cursor_on()                   ## e forcar edicao de texto com cursor piscando na tela
-        self.cursor_typing_text=True                ## indica que o cursor pisca no modo de edicao
+        self.cursor_typing_text=True           ## indica que o cursor pisca no modo de edicao
 
-		
-        self.canvas.after(self.cursor_ticks, self.change_cursor_state())
-        #self.canvas.mainloop()
-        #timer.start();
-		
-
+        
+        self.canvas.after(self.cursor_ticks, self.change_cursor_state)
 
         while True:
+            #import pdb;pdb.set_trace()
+            #print("(440): x, y e index ====> ",x_cursor, y_cursor, index_string)
             self.set_key_released()          ## para zerar o buffer da tecla impedindo de acrescentar varios caracteres
             c = self.read_key();
             ord_tecla=self.code_key_pressed
+            #import pdb;pdb.set_trace()
             if (len(s) < 256 and len(c)>0):           ## texto maximo de 256 caracteres
                 if (c >= " " and c <= chr(126)):
                     if (self.cursor_insert or (index_string==len(s))):  ## acrescentar um caractere
                         s=insert_str(s,c,index_string)
-                        print(s,c,index_string,len(s))
                     else:
-                    	s=insert_str(s,c,index_string,False)              ## substituir um caractere (<insert>=off)
+                        s=insert_str(s,c,index_string,False)              ## substituir um caractere (<insert>=off)
                     index_string+=1
             if ord_tecla==37:    ## <VK_LEFT>
                 index_string-=1
             if ord_tecla==39:                     ## <VK_RIGHT>
-            	index_string+=1
+                index_string+=1
             if ord_tecla==8:                      ## <VK_BACKSPACE>
                 if (index_string>0):
                     s=delete_char_at(s,index_string - 1)
@@ -446,25 +470,32 @@ class Pytme:
                 index_string = 0
             if (index_string > len(s)):
                 index_string = len(s)
+
+            self.set_cursor_off()
             self.goto_xy(x_cursor_inicial, y_cursor_inicial)
             self.text(s)
-            if (ord_tecla == 8) or (ord_tecla == 46):   ## imprimir um caracter em branco no final da
+            
+            if (ord_tecla == 8) or (ord_tecla == 46):  ## imprimir um caracter em branco no final da
                 self.text(" ")                         ## string, caso algum caractere tenha sido deletado
-                x_cursor = 1 + (index_string + x_cursor_inicial - 1) % (self.qtd_colunas)  ## calcula posicao do cursor em funcao de index_string
-                y_cursor = y_cursor_inicial + (index_string + x_cursor_inicial - 1) / (self.qtd_linhas)
-                if (y_cursor > self.qtd_linhas):        ## quando o cursor ultrapassar a ultima linha
-                    y_cursor_inicial-=1
-                    y_cursor-=1
+            x_cursor = 1 + (x_cursor_inicial + index_string - 1) % (self.qtd_colunas)  ## calcula posicao do cursor em funcao de index_string
+            #x_cursor = (x_cursor_inicial + index_string) % (self.qtd_colunas)  ## calcula posicao do cursor em funcao de index_string
+            y_cursor = y_cursor_inicial + int((index_string - 1 + x_cursor_inicial) / self.qtd_colunas)
+            if (y_cursor > self.qtd_linhas):        ## quando o cursor ultrapassar a ultima linha
+                y_cursor_inicial-=1
+                y_cursor-=1
+            #self.set_cursor_off()
+            #self.goto_xy(x_cursor_inicial, y_cursor_inicial)
+
+            #x,y = self.insert_text_xy_in_content(x_cursor_inicial, y_cursor_inicial,s)
 
             ##cursorEditing=false  ## para permanecer o cursor ativo quando move-lo ou se inserir um caractere
             ##cursor_XOR_mode=True   ## para permanecer o cursor ativo quando move-lo ou se inserir um caractere
             
-#            timer.restart()
-            
+            self.set_cursor_on()
             self.goto_xy(x_cursor, y_cursor)
             if (ord_tecla == 13):
-            	break
-#        timer.stop()
+                break
+
         self.set_cursor_mode(cursor_mode)  ## volta ao estado inicial do cursor
         self.cursor_typing_text = False   ## indica que nao esta no modo de digitacao
         self.cursor_XOR_mode = True       ## indica que o cursor nao pisca fora do modo de edicao
@@ -472,7 +503,7 @@ class Pytme:
         return s
 
     def type_textln(self, *args):
-    	self.text_ln(*args)
+        self.textln(*args)
         texto = self.type_text()
         self.carriage_return_line_feed()
         return texto
@@ -489,7 +520,7 @@ class Pytme:
 
 
 """
- *	Falta fazer:
+ *  Falta fazer:
  *  
  *  1- melhorar a velocidade do piscar do cursor para que fique igual, ou parecido, na maioria das CPUs
  *  2- verificar tamanho da fonte para colocar espacamento correto
@@ -497,4 +528,39 @@ class Pytme:
  *  4- melhorar a constancia de velocidade nas interacoes (ora fica mais lento, ora fica no tempo normal)
  * 
 """
+
+pytme=Pytme()
+goto_xy=pytme.goto_xy
+set_cursor_on=pytme.set_cursor_on
+set_cursor_off=pytme.set_cursor_off
+set_cursor_mode=pytme.set_cursor_mode
+get_cursor_mode=pytme.get_cursor_mode
+get_cursor_X=pytme.get_cursor_X
+get_cursor_Y=pytme.get_cursor_Y
+change_cursor_state=pytme.change_cursor_state
+
+insert_xy_to_eol=pytme.insert_xy_to_eol
+carriage_return_line_feed=pytme.carriage_return_line_feed
+clr_scr=pytme.clr_scr
+clr_eol=pytme.clr_eol
+
+reset_colors=pytme.reset_colors
+set_back_ground_color=pytme.set_back_ground_color
+set_text_color=pytme.set_text_color
+
+text=pytme.text
+textln=pytme.textln
+set_key_released=pytme.set_key_released
+get_key_pressed=pytme.get_key_pressed
+get_key_code_pressed=pytme.get_key_code_pressed
+on_key_pressed=pytme.on_key_pressed
+on_key_released=pytme.on_key_released
+
+delay=pytme.delay
+
+is_key_pressed=pytme.is_key_pressed
+read_key=pytme.read_key
+type_textln=pytme.type_textln
+type_text=pytme.type_text
+typeTextln=pytme.typeTextln
 
