@@ -83,7 +83,6 @@ class Pytme:
     ###  metodo de inicializacao da janela  ###
 
     def __init__(self):
-        print("entrei aqui")
         self.window = tk.Tk()
         self.window.resizable(width=False, height=False)
         self.window.title(self.titulo)
@@ -232,7 +231,7 @@ class Pytme:
         self.paint()
 
     def blinking_cursor(self):
-        print("piscou")
+        #print("piscou")
         self.change_cursor_state()
         self.cursor_blinking_after = self.canvas.after(self.cursor_ticks, self.blinking_cursor)
         self.show_cursor()
@@ -336,6 +335,7 @@ class Pytme:
         for texto in args:
             self.printing_text(texto)
         self.carriage_return_line_feed()
+        self.paint()
 
 
     ###  metodo de temporizacao  ###

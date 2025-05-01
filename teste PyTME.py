@@ -5,22 +5,25 @@ from PyTME import *
 
 goto_xy(1,1)
 text("abracadabra")
+delay(500)
 for i in range(65):
-	print(i,chr(i))
-	text_ln(str(i)+' '+chr(i))
+    print(i,chr(i))
+    textln(str(i)+' '+chr(i))
+    delay(10)
 
+delay(3000)
 goto_xy(2,2)
 text("hHpAsT1LomeAsou")
-delay(3000)
+delay(4000)
 goto_xy(3,2)
 text("12345678901234567890123456789012345678901234567890123456789012345678901234567890")
 
 delay(3000)
 clr_scr()
-text_ln('ok - 1')
-text_ln('ok - 2')
-text_ln('ok - 3')
-text_ln('ok - 4')
+textln('ok - 1')
+textln('ok - 2')
+textln('ok - 3')
+textln('ok - 4')
 text('nok - 1')
 text(' - nok - 2')
 text(' - nok - 3')
@@ -35,7 +38,7 @@ for i in range(20):
 delay(1000)
 goto_xy(1,15)
 for i in range(20):
-    text_ln(str(i))
+    textln(str(i))
     delay(50)
 
 delay(1000)
@@ -48,6 +51,8 @@ print("agora...")
 
 
 print("pressione uma tecla...")
+goto_xy(25,10)
+text(" pressione uma tecla... ")
 tecla=read_key()
 goto_xy(15,20)
 #import pdb;pdb.set_trace()
