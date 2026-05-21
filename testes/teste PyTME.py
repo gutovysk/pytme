@@ -1,5 +1,5 @@
 #import pdb; pdb.set_trace()
-from PyTME import *
+from Jtme import *
 
 
 
@@ -78,11 +78,35 @@ for a in range(25):
             goto_xy(15,20)
             text("      ")
             print("tecla nao pressionada")
+
+
+clr_scr()            
+read_key()
+for a in range(25):
+    for b in range(80):
+        if b==24:
+            #import pdb;pdb.set_trace()
+            pass
+        goto_xy(b+1,a+1)
+        #goto_xy(5,5)
+        text("X")
+        #print(a,b)
+        if is_key_pressed():
+            tecla = get_key_pressed()
+            goto_xy(15,20)
+            text(tecla)
+            print("tecla pressionada")
+        else:
+            goto_xy(15,20)
+            text("      ")
+            print("tecla nao pressionada")
             
 read_key()
+
+
 
 clr_scr()
 goto_xy(35,12)
 text("TERMINOU!!!")
 print ("terminou")
-
+delay(3000)
