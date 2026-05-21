@@ -120,10 +120,10 @@ class Pytme(object):
     #     from Pytme import Pytme
     #     Pytme.cursor_width_factor = 1.0   # cursor cobrindo toda a coluna
     #     Pytme.cursor_height_factor = 0.25 # cursor mais alto
-    cursor_width_factor = 0.7    # 0..1: fracao da largura do caractere
+    cursor_width_factor = 0.8    # 0..1: fracao da largura do caractere
     cursor_height_factor = 0.15  # 0..1: fracao da altura do caractere
-    cursor_offset_x = 1          # pixels: desloca horizontalmente (+/- ajuste fino)
-    cursor_offset_y = -1         # pixels: desloca verticalmente (negativo sobe)
+    cursor_offset_x = 3          # pixels: desloca horizontalmente (+/- ajuste fino)
+    cursor_offset_y = -5         # pixels: desloca verticalmente (negativo sobe)
 
     # --- teclado ---
     key_pressed = None           # ultima tecla recebida (event.char)
