@@ -1,6 +1,6 @@
 """
     APFJogos - PyTME (Python Text Mode Emulator)
-        versao: 3.0 (renomeacao Pytme -> PyTME)
+        versao: 3.2 (fonte forcada monoespacada + cursor sempre visivel ao mover)
         data: 20/05/2026
 
     PyTME emula uma tela de modo texto 80x25 sobre Tk, com cursor
@@ -88,7 +88,11 @@ class Pytme(object):
     qtd_colunas = 80
     qtd_linhas = 25
     font_size = 13
-    fonte = ('Courier', 13, 'bold')
+    # Fonte default: None significa "use a fonte fixa do sistema"
+    # (TkFixedFont). E' a forma mais segura de garantir monoespacada.
+    # Para forcar outra fonte, atribuir uma tupla (familia, tamanho, peso):
+    #     Pytme.fonte = ('Consolas', 13, 'bold')
+    fonte = None
     char_width = 10              # recalculado em _init()
     char_height = 16             # recalculado em _init()
     width = 0
@@ -117,13 +121,15 @@ class Pytme(object):
     # Os "offset" sao em pixels e permitem ajuste fino.
     # Para mudar o cursor, ajuste estes valores ANTES da primeira chamada
     # (antes da janela abrir). Exemplo:
-    #     from Pytme import Pytme
+    #     from PyTME import Pytme
     #     Pytme.cursor_width_factor = 1.0   # cursor cobrindo toda a coluna
     #     Pytme.cursor_height_factor = 0.25 # cursor mais alto
-    cursor_width_factor = 0.8    # 0..1: fracao da largura do caractere
-    cursor_height_factor = 0.15  # 0..1: fracao da altura do caractere
-    cursor_offset_x = 3          # pixels: desloca horizontalmente (+/- ajuste fino)
-    cursor_offset_y = -5         # pixels: desloca verticalmente (negativo sobe)
+    cursor_width_factor = 1.0    # 0..1: fracao da largura do caractere
+                                 #       (1.0 = mesma largura da coluna)
+    cursor_height_factor = 0.12  # 0..1: fracao da altura do caractere
+                                 #       (modo insert: linha fina embaixo)
+    cursor_offset_x = 0          # pixels: ajuste fino horizontal
+    cursor_offset_y = 0          # pixels: ajuste fino vertical (negativo sobe)
 
     # --- teclado ---
     key_pressed = None           # ultima tecla recebida (event.char)
@@ -167,31 +173,96 @@ class Pytme(object):
         cls._f.resizable(width=False, height=False)
         cls._f.title(cls._titulo)
 
-        # mede a fonte real para nao chutar 8x12
+        # ============================================================
+        # Configuracao de fonte com GARANTIA de monoespacada.
+        # ============================================================
+        # Estrategia:
+        #  1. Se o usuario forneceu uma tupla em cls.fonte, usa ela.
+        #  2. Senao, TENTA explicitamente uma lista de fontes
+        #     monoespacadas conhecidas, na ordem. Para cada uma,
+        #     verifica se realmente esta' monoespacada (largura de
+        #     varios chars e' a mesma). So' aceita se passar no teste.
+        cls._font_obj = None
         try:
-            f = _Font(family=cls.fonte[0], size=int(cls.fonte[1]),
-                      weight=cls.fonte[2] if len(cls.fonte) > 2 else 'normal')
-            mw = f.measure('M')
-            mh = f.metrics('linespace')
-            if mw > 0:
-                cls.char_width = mw
-            if mh > 0:
-                cls.char_height = mh
+            if cls.fonte is not None:
+                # usuario forneceu tupla — aceita sem verificar
+                fam = cls.fonte[0]
+                tam = int(cls.fonte[1]) if len(cls.fonte) > 1 else cls.font_size
+                peso = cls.fonte[2] if len(cls.fonte) > 2 else 'normal'
+                cls._font_obj = _Font(family=fam, size=tam, weight=peso)
+            else:
+                # tenta familias conhecidas de fontes monoespacadas,
+                # em ordem de preferencia por plataforma
+                candidatas = [
+                    'Consolas',           # Windows (preferida)
+                    'Lucida Console',     # Windows fallback
+                    'Courier New',        # Windows fallback
+                    'Menlo',              # macOS
+                    'Monaco',             # macOS fallback
+                    'DejaVu Sans Mono',   # Linux
+                    'Liberation Mono',    # Linux
+                    'Courier',            # fallback geral
+                ]
+                for fam in candidatas:
+                    try:
+                        f = _Font(family=fam, size=cls.font_size,
+                                  weight='normal')
+                        # teste de monoespacamento: medir varios chars,
+                        # incluindo estreitos (i, l) e largos (M, W)
+                        larguras = [f.measure(ch) for ch in 'iWMl0.@']
+                        if len(set(larguras)) == 1 and larguras[0] > 0:
+                            # passou no teste: e' monoespacada de verdade
+                            cls._font_obj = f
+                            break
+                    except Exception:
+                        continue
+                if cls._font_obj is None:
+                    # ultimo recurso: TkFixedFont (mesmo que possa
+                    # nao ser perfeita)
+                    base = _tkFont.nametofont('TkFixedFont')
+                    cls._font_obj = _Font(
+                        family=base.actual('family'),
+                        size=cls.font_size,
+                        weight='normal',
+                    )
+
+            # Medicao da fonte resolvida.
+            # char_width: largura real de um caractere monoespacado.
+            # char_height: usamos a altura visual da letra (ascent +
+            # descent), NAO o linespace (que inclui line gap extra).
+            cls.char_width = cls._font_obj.measure('M')
+            ascent = cls._font_obj.metrics('ascent')
+            descent = cls._font_obj.metrics('descent')
+            cls.char_height = ascent + descent
+            cls._font_ascent = ascent
+            cls._font_descent = descent
         except Exception:
-            pass
+            cls._font_obj = None
+            cls._font_ascent = cls.char_height * 3 // 4
+            cls._font_descent = cls.char_height - cls._font_ascent
 
         # Tamanho final do cursor calculado a partir dos factors.
-        # Se quiser cursor maior/menor, ajuste cursor_width_factor /
-        # cursor_height_factor antes do init.
         cls.cursor_width = max(1, int(cls.char_width * cls.cursor_width_factor))
         cls.cursor_height = max(1, int(cls.char_height * cls.cursor_height_factor))
 
-        cls.width = cls.qtd_colunas * cls.char_width + 5
-        cls.height = cls.qtd_linhas * cls.char_height + 2
+        # Margens de desenho (px) — o canvas tem essa borda interna para
+        # nao deixar caracteres encostados na moldura da janela.
+        cls._margin_x = 2
+        cls._margin_y = 1
 
+        cls.width = cls.qtd_colunas * cls.char_width + 2 * cls._margin_x
+        cls.height = cls.qtd_linhas * cls.char_height + 2 * cls._margin_y
+
+        # opcoes comuns para items de texto.
+        # IMPORTANTE: cada caractere e' ancorado no CENTRO da sua celula
+        # (em vez de NW). Isso garante visual uniforme mesmo se a fonte
+        # tiver pequenas variacoes — caracteres mais estreitos ficam
+        # centralizados na coluna, sem aparentar "desalinhados".
+        # Usamos o objeto Font (cls._font_obj), nao a tupla, para evitar
+        # substituicoes silenciosas pelo Tk.
         cls._opcoes_do_texto = {
-            "font": cls.fonte,
-            "anchor": _tk.NW,
+            "font": cls._font_obj if cls._font_obj is not None else cls.fonte,
+            "anchor": _tk.CENTER,
             "fill": cls.TEXT_COLOR_DEFAULT,
         }
 
@@ -214,28 +285,53 @@ class Pytme(object):
         cls._key_chars = {}
         cls._pending_release = None
 
-        # cria a matriz 2D de conteudo (qtd_linhas x qtd_colunas), igual ao Java
+        # cria a matriz 2D de conteudo (qtd_linhas x qtd_colunas)
         cls._conteudo = [[' '] * cls.qtd_colunas for _ in range(cls.qtd_linhas)]
 
-        # PERFORMANCE: cria os 25 itens de texto persistentes UMA vez.
-        # Depois disso, _paint() apenas atualiza o texto desses itens
-        # via itemconfig (rapido) em vez de recriar tudo (lento + flicker).
-        cls._line_items = []
-        for linha in range(cls.qtd_linhas):
-            iid = cls._canvas.create_text(
-                2, linha * cls.char_height,
-                text=' ' * cls.qtd_colunas,
-                **cls._opcoes_do_texto
-            )
-            cls._line_items.append(iid)
-        # cria o item do cursor (escondido inicialmente)
-        cls._cursor_item = cls._canvas.create_rectangle(
+        # ============================================================
+        # GRADE DE ITEMS DE TEXTO: um item por celula da tela.
+        # Cada caractere e' ancorado no CENTRO da sua celula —
+        # posicao = (margem + col*char_width + char_width/2,
+        #            margem + lin*char_height + char_height/2)
+        # ============================================================
+        cls._cell_items = [[None] * cls.qtd_colunas
+                           for _ in range(cls.qtd_linhas)]
+        # _canvas_text: espelho do que esta realmente no canvas, para
+        # evitar chamadas itemconfig desnecessarias (otimizacao).
+        cls._canvas_text = [[' '] * cls.qtd_colunas
+                            for _ in range(cls.qtd_linhas)]
+        for lin in range(cls.qtd_linhas):
+            for col in range(cls.qtd_colunas):
+                cx = cls._margin_x + col * cls.char_width + cls.char_width // 2
+                cy = cls._margin_y + lin * cls.char_height + cls.char_height // 2
+                iid = cls._canvas.create_text(
+                    cx, cy,
+                    text=' ',
+                    **cls._opcoes_do_texto
+                )
+                cls._cell_items[lin][col] = iid
+
+        # ============================================================
+        # CURSOR: dois items sobrepostos para efeito de inversao:
+        #   _cursor_rect: retangulo na cor do texto (cobertura branca).
+        #   _cursor_char: caractere atual sobre o retangulo, com cor de
+        #                 fundo (preto). Efeito visual = letra invertida.
+        # ============================================================
+        cls._cursor_rect = cls._canvas.create_rectangle(
             0, 0, cls.cursor_width, cls.cursor_height,
             fill=cls.cursor_color, outline=cls.cursor_color,
             state='hidden'
         )
-        # conjuntos de "sujeira" — o que precisa ser redesenhado
-        cls._dirty_lines = set(range(cls.qtd_linhas))   # comeca tudo sujo
+        cls._cursor_char = cls._canvas.create_text(
+            0, 0, text=' ',
+            fill=cls.BACK_GROUND_COLOR_DEFAULT,
+            anchor=_tk.CENTER,
+            font=cls._opcoes_do_texto['font'],
+            state='hidden',
+        )
+
+        # conjuntos de "sujeira"
+        cls._dirty_lines = set(range(cls.qtd_linhas))
         cls._cursor_dirty = True
 
         cls._f.bind("<Key>", cls._on_key_pressed)
@@ -251,53 +347,91 @@ class Pytme(object):
 
     @classmethod
     def _paint(cls):
-        # PERFORMANCE: redesenha apenas as linhas que mudaram, e move o
-        # cursor por coords em vez de recriar. Reduz drasticamente o
-        # numero de operacoes no Canvas e elimina o flicker do
-        # delete("all") + recriar tudo.
+        # ==========================================================
+        # PAINT por celula (grade 80x25 de items de texto).
+        # ==========================================================
+        # Para cada linha "suja", atualiza somente as celulas que
+        # REALMENTE mudaram (usa cache _canvas_text). O custo de
+        # itemconfig e' pago so quando ha diferenca.
         if cls._dirty_lines:
             for linha in cls._dirty_lines:
-                cls._canvas.itemconfig(
-                    cls._line_items[linha],
-                    text=''.join(cls._conteudo[linha])
-                )
+                row_buffer = cls._conteudo[linha]
+                row_canvas = cls._canvas_text[linha]
+                row_items = cls._cell_items[linha]
+                for col in range(cls.qtd_colunas):
+                    novo = row_buffer[col]
+                    if row_canvas[col] != novo:
+                        cls._canvas.itemconfig(row_items[col], text=novo)
+                        row_canvas[col] = novo
             cls._dirty_lines.clear()
 
+        # ==========================================================
+        # CURSOR: dois items sobrepostos para efeito de "inversao".
+        # ==========================================================
+        # cursor_rect: retangulo na cor do texto (branco).
+        # cursor_char: o mesmo caractere que esta na celula, mas com
+        #              cor invertida (cor de fundo, ex.: preto). Fica
+        #              POR CIMA do retangulo.
+        # Resultado visual: o caractere fica visivel "em vinheta"
+        # invertida, sem ser tampado.
         if cls._cursor_dirty:
             if cls.cursor_on and cls.cursor_blink_visible:
-                # Posicao base do cursor: ancorada no canto inferior
-                # esquerdo da celula do caractere. Os offsets permitem
-                # ajuste fino sem mudar a logica.
-                x = ((cls.cursor_X - 1) * cls.char_width
-                     + cls.cursor_offset_x)
-                y = (cls.cursor_Y * cls.char_height
-                     - cls.cursor_height
-                     + cls.cursor_offset_y)
+                # Caractere atualmente sob o cursor
+                ch_sob = cls._conteudo[cls.cursor_Y - 1][cls.cursor_X - 1]
+
+                # Coordenadas da CELULA (topo-esquerda e centro)
+                cell_x = cls._margin_x + (cls.cursor_X - 1) * cls.char_width
+                cell_y = cls._margin_y + (cls.cursor_Y - 1) * cls.char_height
+                cell_cx = cell_x + cls.char_width // 2
+                cell_cy = cell_y + cls.char_height // 2
+
                 if cls.cursor_insert:
-                    # cursor "underline" (linha fina embaixo do caractere)
-                    cls._canvas.coords(
-                        cls._cursor_item,
-                        x, y, x + cls.cursor_width, y + cls.cursor_height
-                    )
+                    # Modo INSERT: barra fina embaixo do caractere
+                    # (na base da letra, alinhada ao descent da fonte).
+                    # Largura = cursor_width_factor * char_width,
+                    # centralizada horizontalmente na celula.
+                    bar_w = cls.cursor_width
+                    bar_h = cls.cursor_height
+                    x1 = (cell_cx - bar_w // 2) + cls.cursor_offset_x
+                    # A barra fica na base da celula, descida do bottom:
+                    y2 = cell_y + cls.char_height + cls.cursor_offset_y
+                    y1 = y2 - bar_h
+                    x2 = x1 + bar_w
+                    cls._canvas.coords(cls._cursor_rect, x1, y1, x2, y2)
+                    cls._canvas.itemconfig(cls._cursor_rect, state='normal')
+                    # No modo insert nao usamos o char invertido — a
+                    # barra fina nao cobre a letra, entao ela continua
+                    # visivel normalmente.
+                    cls._canvas.itemconfig(cls._cursor_char, state='hidden')
                 else:
-                    # cursor "block" (modo overwrite): retangulo cobrindo
-                    # o caractere inteiro
-                    y_top = (cls.cursor_Y - 1) * cls.char_height + cls.cursor_offset_y
-                    y_bot = cls.cursor_Y * cls.char_height + cls.cursor_offset_y
-                    cls._canvas.coords(
-                        cls._cursor_item,
-                        x, y_top, x + cls.cursor_width, y_bot
+                    # Modo OVERWRITE: bloco cobrindo a celula inteira.
+                    # Como o bloco tampa a letra, desenhamos a letra com
+                    # cor de fundo POR CIMA (efeito de inversao).
+                    x1 = cell_x + cls.cursor_offset_x
+                    y1 = cell_y + cls.cursor_offset_y
+                    x2 = x1 + cls.char_width
+                    y2 = y1 + cls.char_height
+                    cls._canvas.coords(cls._cursor_rect, x1, y1, x2, y2)
+                    cls._canvas.itemconfig(cls._cursor_rect, state='normal')
+                    # Texto invertido CENTRADO na celula (ancora CENTER)
+                    cls._canvas.coords(cls._cursor_char,
+                                       cell_cx + cls.cursor_offset_x,
+                                       cell_cy + cls.cursor_offset_y)
+                    cls._canvas.itemconfig(
+                        cls._cursor_char,
+                        text=ch_sob,
+                        fill=cls.BACK_GROUND_COLOR_DEFAULT,
+                        state='normal'
                     )
-                cls._canvas.itemconfig(cls._cursor_item, state='normal')
             else:
-                cls._canvas.itemconfig(cls._cursor_item, state='hidden')
+                cls._canvas.itemconfig(cls._cursor_rect, state='hidden')
+                cls._canvas.itemconfig(cls._cursor_char, state='hidden')
             cls._cursor_dirty = False
 
         # NAO chamamos update_idletasks aqui — deixa o Tk acumular as
-        # mudancas e aplicar quando estiver ocioso (mais eficiente,
-        # menos flicker). Quem precisa de update sincrono — delay(),
-        # read_key(), is_key_pressed() — chama _f.update() explicitamente
-        # e ja' processa o que estiver pendente.
+        # mudancas e aplicar quando estiver ocioso. Quem precisa de
+        # update sincrono — delay(), read_key(), is_key_pressed() —
+        # chama _f.update() explicitamente.
 
     @classmethod
     def _mark_dirty_line(cls, linha_idx):
@@ -591,10 +725,16 @@ class Pytme(object):
             cls._canvas.configure(bg=cls.BACK_GROUND_COLOR_DEFAULT)
         except Exception:
             pass
-        # PERFORMANCE: reconfigurar a cor dos 25 itens persistentes
-        # (sem recria-los).
-        for iid in cls._line_items:
-            cls._canvas.itemconfig(iid, fill=cls.TEXT_COLOR_DEFAULT)
+        # reconfigurar a cor dos itens persistentes (grade celular)
+        for row in cls._cell_items:
+            for iid in row:
+                cls._canvas.itemconfig(iid, fill=cls.TEXT_COLOR_DEFAULT)
+        # tambem ajusta cor do char invertido do cursor para o novo fundo
+        try:
+            cls._canvas.itemconfig(
+                cls._cursor_char, fill=cls.BACK_GROUND_COLOR_DEFAULT)
+        except Exception:
+            pass
         cls._paint()
 
     @classmethod
@@ -606,6 +746,11 @@ class Pytme(object):
             cls._canvas.configure(bg=back_ground_color)
         except Exception:
             pass
+        # ajusta cor do char invertido do cursor
+        try:
+            cls._canvas.itemconfig(cls._cursor_char, fill=back_ground_color)
+        except Exception:
+            pass
         cls._paint()
 
     @classmethod
@@ -614,9 +759,16 @@ class Pytme(object):
         if text_color is None:
             text_color = cls.TEXT_COLOR_DEFAULT
         cls._opcoes_do_texto["fill"] = text_color
-        # PERFORMANCE: reconfigurar a cor dos itens existentes.
-        for iid in cls._line_items:
-            cls._canvas.itemconfig(iid, fill=text_color)
+        # reconfigurar a cor dos itens existentes
+        for row in cls._cell_items:
+            for iid in row:
+                cls._canvas.itemconfig(iid, fill=text_color)
+        # cursor_rect tambem usa cor de texto (cobertura branca)
+        try:
+            cls._canvas.itemconfig(
+                cls._cursor_rect, fill=text_color, outline=text_color)
+        except Exception:
+            pass
         cls._paint()
 
     # =============================================================
@@ -919,28 +1071,34 @@ class Pytme(object):
                 if index_string > len(s):
                     index_string = len(s)
 
-                # redesenha a string toda a partir da posicao inicial
+                # redesenha a string a partir da posicao inicial. O cursor
+                # FICA VISIVEL durante o redraw (apenas reposicionamos
+                # logicamente). NAO desligamos cursor_on — assim ele nao
+                # "pisca" entre uma tecla e outra.
                 cls._stop_blink()
-                cls.cursor_on = False
                 cls.cursor_X, cls.cursor_Y = x0, y0
                 cls.text(s)
                 if ord_tecla == 8 or ord_tecla == 46:
                     cls.text(" ")
 
-                # calcula posicao do cursor em funcao do index
+                # calcula nova posicao do cursor em funcao do index
                 x_cursor = 1 + (x0 + index_string - 1) % cls.qtd_colunas
                 y_cursor = y0 + (x0 + index_string - 1) // cls.qtd_colunas
                 if y_cursor > cls.qtd_linhas:
                     y0 -= 1
                     y_cursor -= 1
 
-                cls.cursor_on = True
                 cls.cursor_X, cls.cursor_Y = x_cursor, y_cursor
+                # garantia: cursor visivel agora, imediatamente apos mover.
+                cls.cursor_blink_visible = True
+                cls._cursor_dirty = True
+                cls._paint()
 
                 if ord_tecla == 13:    # ENTER
-                    cls._paint()
                     break
 
+                # reinicia o ciclo de blink — o cursor JA esta visivel,
+                # entao o blink so vai apagar/aparecer apos cursor_ticks ms.
                 cls._start_blink()
 
         finally:
