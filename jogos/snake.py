@@ -11,7 +11,7 @@
 """
 
 #from PyTME import *
-from Jtme import *
+from PyTME import *
 import random
 
 

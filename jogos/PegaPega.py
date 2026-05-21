@@ -1,4 +1,4 @@
-from Jtme import *
+from PyTME import *
 import random
 
 set_cursor_off()  # retira o cursor da tela

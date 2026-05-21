@@ -12,7 +12,7 @@
 """
 #from PyTME_v1_1 import *
 #from PyTME import *
-from Jtme import *
+from PyTME import *
 import random
 
 

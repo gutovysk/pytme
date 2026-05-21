@@ -17,7 +17,7 @@
         Enter     - recomecar apos perder vida
 """
 
-from Jtme import *
+from PyTME import *
 import random
 import time
 
